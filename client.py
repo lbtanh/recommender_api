@@ -1,7 +1,7 @@
 import requests, json
 
 # initialize the REST API endpoint URL along with the input
-REST_API_URL = "http://linuxsws009:5001/predict_inf"
+REST_API_URL = "http://linuxsws009:5000/predict_inf"
 # print('test predict....')
 
 # acc_type: # 0: influencer, 1: branch, 2: all

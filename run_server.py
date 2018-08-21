@@ -11,6 +11,7 @@ import io
 import json, datetime
 from flask import request
 from influencer_recommend import *
+import pdb
 
 # initialize our Flask application 
 app = flask.Flask(__name__)
@@ -32,9 +33,11 @@ def predict():
         key_words = content['list_key_word']
         acc_type = content['acc_type']
         num_results = content['num_results']
+        # pdb.set_trace()
         df, preds = sim_inf.predict_similar(key_words, sim_inf.tfidf_matrix, num_results, acc_type)
-        print(df['img_url'])
-        
+        # OverflowError: Unsupported UTF-8 sequence length when encoding string
+        df = df.loc[:, df.columns != 'ts']
+
         # print(df)
 
         # for x in sorted_inds[:2]:
@@ -53,6 +56,4 @@ if __name__ == "__main__":
     print("* Loading tfidf_matrix and Flask starting server...\nplease wait until server has fully started")
 	# calculate distance from a sentence to list of sentences
     sim_inf = similar_influencer()
-
-
-    app.run(host = '0.0.0.0', port=5001, debug=True)    
+    app.run(host = '0.0.0.0', port=5000, debug=False)    
