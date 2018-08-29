@@ -1,8 +1,10 @@
+import sys
+sys.path.insert(0, './../../recommender_api')
 import os
 import requests
 import logging
 # from constants import *
-import constants
+from utils import constants
 import json
 import datetime, time
 from requests.exceptions import RequestException
@@ -28,7 +30,7 @@ class FacebookGraphApi(object):
 
         (self.access_token,self.user_id) = constants.TOKENS[0]
         self.version = constants.default_version
-        self.session = requests
+        # self.session = requests
 
 
     def load_token_file(self,token_file_path):
@@ -250,7 +252,7 @@ class FacebookGraphApi(object):
             LOGGER.info(url)
             resp = requests.get(url, params=request_param)
             if resp.status_code != 200:
-                business_info = resp.json()
+                business_info= json.loads('{"error":"%s"}'%(resp.json()['error']))
                 LOGGER.error("Get business info of username %s fails: %s " % (username, resp.content))
             else:
                 json_resp = resp.json()
@@ -274,7 +276,8 @@ class FacebookGraphApi(object):
 
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
+    print('test...')
 
     # access_token = 'EAACLXTuiZBKkBAJZBxOEcwblSFcFfnr13bzq5soAWUsKIqxx7hGRvSPFPbPg2J7GrirqhHy4bnylZCZCZAyWh6MdRvx9imTSxS4K7yNJrZCHxHhRCz1mTAPCrZAQ9QZC9NvxWsL66vm8uV65CAu0DMuH3QZB7xf0kY5qTKFip0ioPtBZB0F2fZBiyCbd4DZBE8bhkMgZD'
     # fb_graph = FacebookGraphApi(version='v3.1', token=access_token)
@@ -288,8 +291,12 @@ class FacebookGraphApi(object):
 # ======================================
 
     # #17841401610104138, 17841407517779759
-    # fb_graph = FacebookGraphApi('./FacebookCrawler/instagram_token.csv')
-    # test = fb_graph.get_business_discovery_all( username = 'emmaparkerandco', media_count = 100)#17841401610104138, 17841407517779759
-    # # test = fb_graph.get_business_info(username = 'buzzingtales_')#17841401610104138, 17841407517779759
+    # path_instagram_token = join(dirname(os.path.abspath(__file__)),constants.INSTAGRAM_TOKEN_FILE)
+
+    # fb_graph = FacebookGraphApi(path_instagram_token)
+    # # test = fb_graph.get_business_discovery_all( username = 'emmaparkerandco', media_count = 100)#17841401610104138, 17841407517779759
+    # s_time = time.time()
+    # test = fb_graph.get_business_info(username = 'emmaparkerandco')#17841401610104138, 17841407517779759
     # print(test)
+    # print(time.time() - s_time)
 

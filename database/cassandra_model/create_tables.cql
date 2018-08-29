@@ -1,3 +1,4 @@
+user aify_recommend;
 CREATE TABLE IF NOT EXISTS recommend_influencer (
             influencer_name TEXT, -- SocialUser
             bio TEXT, /*LIST < list of characteristics >  not see */
@@ -25,8 +26,6 @@ CREATE TABLE IF NOT EXISTS recommend_influencer (
         ) WITH CLUSTERING ORDER BY (ts DESC) ;
 
 
-
-user aify_recommend;
 CREATE TABLE IF NOT EXISTS aify_recommend.user_business_discovery (
     id bigint,
     name text,
@@ -37,13 +36,42 @@ CREATE TABLE IF NOT EXISTS aify_recommend.user_business_discovery (
     followers_count int,
     username text,
     profile_picture_url text,
-    ts timeuuid,
-    PRIMARY KEY (id, ts)
-) WITH CLUSTERING ORDER BY (ts DESC);
+    --ts timeuuid,
+    updated_date TIMESTAMP,
+    PRIMARY KEY (id, username)
+) WITH CLUSTERING ORDER BY (username DESC);
 
 
-CREATE TABLE IF NOT EXISTS aify_recommend.Person (
+--user definded type
+CREATE TYPE aify_recommend.type_business_info (
+    id text,
+    website text,
+    media_count int,
+    followers_count int,
+    name text,
+    username text,
+    profile_picture_url text,
+    new_post int
+);
+
+
+ --find how many new post
+CREATE TABLE IF NOT EXISTS aify_recommend.watch_list (
+    user_id text, -- aify_id or instagram_id
+    --watch_user_list list<frozen<map<text, int>>>, --map<username, current_post> (list of dict in python)
+    watch_user_list map<text, frozen<aify_recommend.type_business_info>>,
+    viewed_time TIMESTAMP,
+    updated_time timestamp,
+    PRIMARY KEY(user_id)
+) ;
+
+
+
+
+-- test some operation
+CREATE TABLE IF NOT EXISTS test.Person (
     id timeuuid,
+    user_name text,
     first_name text,
     last_name text,
     PRIMARY KEY(id)

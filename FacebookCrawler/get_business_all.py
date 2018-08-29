@@ -1,11 +1,11 @@
 import sys
-sys.path.insert(0, '/home/anh_lbt/atvn/sw_follou/recommender_api/database/')
+sys.path.insert(0, './../../recommender_api')
 import facebook_graph_api
 import argparse, time, os
 from threading import Thread
-import constants
-import models
-import db_cassandra
+from utils import constants
+from database import models
+from database import db_cassandra
 import pandas as pd
 from os.path import dirname, join
 from cassandra.cqlengine import connection
@@ -21,12 +21,14 @@ import pdb
 # parser.add_argument('--n', default='file_name.txt', type=str, help='file name to save')
 # args = parser.parse_args()
 
+#crawl new account
 def get_influencer_profiles(begin, end, cass_session, fb_graph):
     connection.set_session(cass_session)
     list_business_discovery_all = []
+    # pdb.set_trace()
     # read instagram id 
-    path = join(dirname(dirname(os.path.abspath(__file__))),constants.instagram_id_path_file)
-
+    path = join(dirname(dirname(os.path.abspath(__file__))),constants.INSTAGRAM_ID_PATH)
+    print(path)
     with open(path, "r") as read_file:
         list_id = read_file.read().split('\n')
 #     f = open(writer_file, 'a')
@@ -37,7 +39,7 @@ def get_influencer_profiles(begin, end, cass_session, fb_graph):
         if datetime.now().hour >= 8 and datetime.now().hour <= 19:
             time_sleep = 60
         else:
-            time_sleep = 20    
+            time_sleep = 40    
         print('sleeping %s'%time_sleep)
         time.sleep(time_sleep)#constants.TIME_SLEEP
         i += 1
@@ -51,13 +53,15 @@ def get_influencer_profiles(begin, end, cass_session, fb_graph):
                 # create list to convert into df and save file
                 # list_business_discovery_all.append(self.parser_influencer_data(business_discovery_all))
                 dict_result = fb_graph.parser_influencer_data(business_discovery_all)
-                dict_result['ts'] = uuid_from_time(time.time())
+                # dict_result['ts'] = uuid_from_time(time.time())
+                # pdb.set_trace()
+                dict_result['updated_date'] = datetime.utcnow()
                 event = models.UserBusinessDiscovery(**dict_result)
                 event.save()
             else:
                 print('error: %s'%instagram_id)
                 if '32' in str(business_discovery_all['error']['code']):
-                    print('limit reach...sleeping one hour...%s'%datetime.now())
+                    print('***** limit reach...sleeping one hour...%s'%datetime.now())
                     time.sleep(3610)
         except Exception as ex:
             print(ex)
@@ -91,10 +95,11 @@ if __name__=="__main__":
     # end = 2
     # file_name = 'text.txt'
 
-    cass_db = db_cassandra.db_cassandra(['172.33.47.9'],dict_factory)
+    cass_db = db_cassandra.db_cassandra(constants.HOST_CASSANDRA_DB ,dict_factory)
     fb_graph = facebook_graph_api.FacebookGraphApi('./instagram_token.csv')
+    print('running....')
     #pdb.set_trace()
-    get_influencer_profiles(2000, 10000, cass_db.session, fb_graph)
+    # get_influencer_profiles(3530, 10000, cass_db.session, fb_graph)
 
     # thread1 = Thread( target=thread1, args=("Thread-1",fb_graph, 2000, 3000,'3000.txt') )
     # thread2 = Thread( target=thread2, args=("Thread-2",fb_graph, 3000, 4000,'4000.txt' ) )
