@@ -1,0 +1,18 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: rs-update-ig-engine-deployment
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: rs-update-ig-engine
+    spec:
+      containers:
+      - name: rs-update-ig-engine
+        image: follou/rs-update-ig-engine:v1
+        env:
+        - name: CONFIG_SOURCE
+          value: "local_config"
+

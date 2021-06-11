@@ -4,64 +4,97 @@ import os
 import requests
 import logging
 # from constants import *
-from utils import constants
+from utils import constants, recommend_utils
 import json
 import datetime, time
 from requests.exceptions import RequestException
 import pandas as pd
 from os.path import dirname, join
 import pdb
+from database import db_cassandra
+import random
 
-service_name = os.getenv("SERVICE_NAME", None)
-if service_name:
-    LOGGER = logging.getLogger("%s.%s" % (service_name, __name__))
-else:
-    LOGGER = logging.getLogger(__name__)
 
-FORMAT = '%(asctime)-15s %(clientip)s %(user)-8s %(message)s'
-logging.basicConfig(level=logging.ERROR)
-LOGGER.info("get influencer profiles")
 
 class FacebookGraphApi(object):
 
-    def __init__(self, token_file_path):
-        print(os.getcwd())
-        self.load_token_file(token_file_path)
-
-        (self.access_token,self.user_id) = constants.TOKENS[0]
-        self.version = constants.default_version
-        # self.session = requests
-
+    def __init__(self, token_file_path = ''):
+        # print(os.getcwd())
+        try:
+            self.LOGGER = recommend_utils.get_logger('FacebookGraphApi.log')
+            if len(constants.TOKENS) == 0:
+                # self.load_token_file(token_file_path)
+                self.load_token_db()
+            self.lst_tokens = self.test_tokens_valid()
+            token_index = random.choice(self.lst_tokens)
+             
+            (self.access_token,self.user_id) = constants.TOKENS[token_index]
+            self.version = constants.default_version
+            # self.session = requests
+            
+        except Exception as ex:
+            print(ex)
+            # self.LOGGER.exception(ex)   
 
     def load_token_file(self,token_file_path):
-        with open(token_file_path, "r") as token_file:
-            for line in token_file:
-                token = line.split(",")[0].strip()
-                instagram_business_id = line.split(",")[1].strip()
-                self.add_token_and_ig_business_id(token, instagram_business_id)
+        try:
+            with open(token_file_path, "r") as token_file:
+                for line in token_file:
+                    token = line.split(",")[0].strip()
+                    instagram_business_id = line.split(",")[1].strip()
+                    self.add_token_and_ig_business_id(token, instagram_business_id)
+        except Exception as ex:
+            self.LOGGER.exception(ex)
+
+    def load_token_db(self,):
+        try:
+            # pdb.set_trace()
+            db = db_cassandra.db_cassandra(contact_points = constants.HOST_CASSANDRA_DB,port_= constants.PORT_CASSANDRA_RS ,factory =recommend_utils.pandas_factory) # pandas_factory
+            db.session.row_factory = recommend_utils.pandas_factory
+            df = db.exectute_query("select * from %s.social_user;"%(constants.KEYSPACE_NAME))
+            # df = rows._current_rows
+            df = df[['access_token', 'external_id', 'account_id', 'social_type']]
+            df = df[df.social_type.isin(['instagram_business'])]
+            
+            for index, row in df.iterrows():
+                self.add_token_and_ig_business_id(row['access_token'], row['external_id'])
+                
+        except Exception as ex:
+            self.LOGGER.exception(ex)            
 
     def add_token_and_ig_business_id(self, token,instagram_business_id):
-        constants.TOKENS.append((token,instagram_business_id))
+        try:
+            constants.TOKENS.append((token,instagram_business_id))
+        except Exception as ex:
+            self.LOGGER.exception(ex)    
 
     def test_tokens_valid(self):
-        print("Testing tokens and account number")
+        # print("Testing tokens and account number")
+        list_valid_token = []
         for token, account in constants.TOKENS:
             try:
                 row = pd.Series()
-                row[constants.TARGETING_FIELD] = constants.TEST_VALID_TOKEN + "/account"
-                a= self.call_request_fb(row, token, account)
-            except Exception as error:
-                print("Token or Account Number Error:")
-                print("Token:" + token)
-                print("Account:" + account)
-                raise  error
+                row[constants.TARGETING_FIELD] = constants.TEST_VALID_TOKEN + "/business_users"
+                res = self.call_request_fb(row, token, account)
+                if res.status_code == 200:
+                    # self.LOGGER.exception('token of account: %s is valid' %account)
+                    list_valid_token.append(constants.TOKENS.index((token, account)))
+                    # break
+                else:
+                    self.LOGGER.exception('token of account: %s is UNvalid' %account)
+                      
+            except Exception as ex:
+                self.LOGGER("Token or Account Number Error:")
+                self.LOGGER("Token:" + token)
+                self.LOGGER("Account:" + account)
+                self.LOGGER.exception(ex)
 
-        print("All tokens and respective account number are valid.")
-        return(a)
+        # print("All tokens and respective account number are valid.")
+        return list_valid_token #index
 
     def call_request_fb(self,row, token, account):
         target_request = row[constants.TARGETING_FIELD]
-        print(target_request)
+        # print(target_request)
         payload = {
             'currency': 'USD',
             'optimize_for': "NONE",
@@ -72,29 +105,31 @@ class FacebookGraphApi(object):
     #    payload_str = str(payload)
     #    print_warning("\tSending in request: %s"%(payload_str))
         url = constants.TEST_VALID_TOKEN.format(account)
-        print('url: {}'.format(url))
+        # print('url: {}'.format(url))
         response = self.send_request(url, payload)
-        return response.content
+        return response
 
 
     def handle_send_request_error(self,response, url, params, tryNumber):
         try:
             error_json = json.loads(response.text)
             if error_json["error"]["code"] == constants.API_UNKOWN_ERROR_CODE_1 or error_json["error"]["code"] == constants.API_UNKOWN_ERROR_CODE_2:
-                LOGGER.error("Error code: %s "%(error_json["error"]["code"]))
+                self.LOGGER.error("Error code: %s "%(error_json["error"]["code"]))
                 # business_discovery = json.loads('{"error":"%s"}'%(resp.json()['error']))
                 time.sleep(constants.INITIAL_TRY_SLEEP_TIME * tryNumber)
                 return self.send_request(url, params, tryNumber)
             else:
-                LOGGER.error("Error Code:" + str(error_json["error"]["code"]))
+                self.LOGGER.error("Error Code:" + str(error_json["error"]["code"]))
                 if "message" in error_json["error"]:
-                    LOGGER.error("Error Message:" + str(error_json["error"]["message"]))
+                    self.LOGGER.error("Error Message:" + str(error_json["error"]["message"]))
                 if "error_subcode" in error_json["error"]:
-                    LOGGER.error("Error Subcode:" + str(error_json["error"]["error_subcode"]))
+                    self.LOGGER.error("Error Subcode:" + str(error_json["error"]["error_subcode"]))
+                    if error_json["error"]["error_subcode"] == constants.API_PERMISSION_ERROR_CODE_33:
+                        (self.access_token,self.user_id) = constants.TOKENS[random.choice(self.test_tokens_valid())]
                 return response
                 
         except Exception as e:
-            LOGGER.error(e)
+            self.LOGGER.error(e)
 
     def send_request(self,url, params, tryNumber = 0):
         tryNumber += 1
@@ -104,12 +139,12 @@ class FacebookGraphApi(object):
                 return resp
             else:
                 if tryNumber >= constants.MAX_NUMBER_TRY:
-                    LOGGER.info('Maxium Number of Tries reached. Failing')
+                    self.LOGGER.warning('Maxium Number of Tries reached. Failing')
                 else:    
                     return self.handle_send_request_error(resp, url, params, tryNumber)        
             
-        except Exception as error:
-            raise RequestException(error.message)
+        except Exception as ex:
+            self.LOGGER.exception(ex)
 
     def get_user_medias(self, user_id, **kwargs):
         """
@@ -141,10 +176,10 @@ class FacebookGraphApi(object):
 
         while len(medias) < media_count and is_more_available:
             try:
-                LOGGER.info(url)
+                self.LOGGER.info(url)
                 resp = requests.get(url, params=request_param)
                 if resp.status_code != 200:
-                    LOGGER.error("Get media of user %s fails: %s " % (user_id, resp.content))
+                    self.LOGGER.error("Get media of user %s fails: %s " % (user_id, resp.content))
                     break
                 json_resp = resp.json()
 
@@ -158,7 +193,7 @@ class FacebookGraphApi(object):
                 else:
                     is_more_available = False
             except RequestException as e:
-                LOGGER.error("Error when request medias of user %s, err: %s, param: %s" %
+                self.LOGGER.error("Error when request medias of user %s, err: %s, param: %s" %
                              (user_id, e, request_param), exc_info=True)
                 break
         return medias
@@ -184,11 +219,11 @@ class FacebookGraphApi(object):
 
         while len(business_discovery) < media_count and is_more_available:
             try:
-                LOGGER.info(url)
+                self.LOGGER.info(url)
                 resp = requests.get(url, params=request_param)
                 if resp.status_code != 200:
                     business_discovery = json.loads('{"error":"%s"}'%(resp.json()['error']))
-                    LOGGER.error("Get business discovery of username %s fails: %s " % (username, resp.content))
+                    self.LOGGER.error("Get business discovery of username %s fails: %s " % (username, resp.content))
                     # business_discovery=json.loads('"business_discovery":"not business account"')
                     break
 
@@ -205,7 +240,7 @@ class FacebookGraphApi(object):
                 else:
                     is_more_available = False
             except RequestException as e:
-                LOGGER.error("Error when request medias of username %s, err: %s, param: %s" %
+                self.LOGGER.error("Error when request medias of username %s, err: %s, param: %s" %
                              (username, e, request_param), exc_info=True)
                 break
         return business_discovery
@@ -222,20 +257,20 @@ class FacebookGraphApi(object):
         url = "%s/%s/%s/" % (constants.FB_INSTAGRAM_BASE_URL, self.version, self.user_id)
         # pdb.set_trace()
         try:
-            LOGGER.info(url)
+            self.LOGGER.info(url)
             # resp = requests.get(url, params=request_param)
             resp = self.send_request(url,params=request_param)
             if resp.status_code != 200:
                 
                 # business_discovery = json.loads('{"error":"%s"}'%(resp.json()['error']))
                 business_discovery = json.loads(resp.text)
-                LOGGER.error("Get business discovery of username %s fails: %s " % (username, resp.content))
+                self.LOGGER.error("Get business discovery of username %s fails: %s " % (username, resp.content))
             else:
                 json_resp = resp.json()
                 #get all media data
                 business_discovery= json_resp['business_discovery']#json_resp['business_discovery']['media']['data']
         except RequestException as e:
-            LOGGER.error("Error when request medias of username %s, err: %s, param: %s" %
+            self.LOGGER.error("Error when request medias of username %s, err: %s, param: %s" %
                             (username, e, request_param), exc_info=True)
             business_discovery = json.loads('{"error":"%s"}'%(resp.json()['error']))               
         return business_discovery
@@ -249,16 +284,16 @@ class FacebookGraphApi(object):
         }
         url = "%s/%s/%s/" % (constants.FB_INSTAGRAM_BASE_URL, self.version, self.user_id)
         try:
-            LOGGER.info(url)
+            self.LOGGER.info(url)
             resp = requests.get(url, params=request_param)
             if resp.status_code != 200:
                 business_info= json.loads('{"error":"%s"}'%(resp.json()['error']))
-                LOGGER.error("Get business info of username %s fails: %s " % (username, resp.content))
+                self.LOGGER.error("Get business info of username %s fails: %s " % (username, resp.content))
             else:
                 json_resp = resp.json()
                 business_info = json_resp['business_discovery']
         except RequestException as e:
-            LOGGER.error("Error when request medias of username %s, err: %s, param: %s" %
+            self.LOGGER.error("Error when request medias of username %s, err: %s, param: %s" %
                             (username, e, request_param), exc_info=True)
             business_info= json.loads('{"error":"%s"}'%(resp.json()['error']))
         return business_info
@@ -291,7 +326,7 @@ if __name__ == "__main__":
 # ======================================
 
     # #17841401610104138, 17841407517779759
-    # path_instagram_token = join(dirname(os.path.abspath(__file__)),constants.INSTAGRAM_TOKEN_FILE)
+    path_instagram_token = join(dirname(os.path.abspath(__file__)),constants.INSTAGRAM_TOKEN_FILE)
 
     # fb_graph = FacebookGraphApi(path_instagram_token)
     # # test = fb_graph.get_business_discovery_all( username = 'emmaparkerandco', media_count = 100)#17841401610104138, 17841407517779759
@@ -299,4 +334,9 @@ if __name__ == "__main__":
     # test = fb_graph.get_business_info(username = 'emmaparkerandco')#17841401610104138, 17841407517779759
     # print(test)
     # print(time.time() - s_time)
+
+    fb_graph = FacebookGraphApi(path_instagram_token)
+    # fb_graph.load_token_db()
+    token_index = fb_graph.test_tokens_valid()
+    print(token_index)
 

@@ -1,0 +1,19 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: influencer-recommendation-deployment
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: influencer-recommendation
+    spec:
+      containers:
+      - name: influencer-recommendation
+        image: 002663593173.dkr.ecr.us-east-1.amazonaws.com/follou/influencer-recommandation:latest
+        env:
+        - name: CONFIG_SOURCE
+          value: "aws_config"
+      imagePullSecrets:
+      - name: regcred

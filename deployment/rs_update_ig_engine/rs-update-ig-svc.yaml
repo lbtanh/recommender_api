@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: rs-update-ig-engine
+  name: rs-update-ig-engine-service
+  namespace: default
+spec:
+  ports:
+  - port: 5002
+    protocol: TCP
+    targetPort: 5002
+  selector:
+    app: rs-update-ig-engine
+  sessionAffinity: None
+  type: LoadBalancer
+status:
+  loadBalancer: {}

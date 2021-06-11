@@ -1,0 +1,19 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: watchlist-engine-deployment
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: watchlist-engine
+    spec:
+      containers:
+      - name: watchlist-engine
+        image: 002663593173.dkr.ecr.us-east-1.amazonaws.com/follou/watchlist-engine:latest
+        env:
+        - name: CONFIG_SOURCE
+          value: "aws_config"
+      imagePullSecrets:
+      - name: regcred
